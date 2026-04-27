@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>El Problema de la Factorización — Base de RSA</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --neon-cyan: #00f5ff;
+    --neon-pink: #ff00e5;
+    --neon-green: #39ff14;
+    --neon-yellow: #ffe600;
+    --neon-purple: #bf00ff;
+    --neon-orange: #ff6600;
+    --bg: #020209;
+    --bg2: #050512;
+    --card: #080820;
+    --text: #c8d6f5;
+    --text-dim: #5a6a8a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 400;
+    line-height: 1.75;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,245,255,0.015) 2px,
+      rgba(0,245,255,0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  /* Grid background */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,245,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,245,255,0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 60px 32px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── HEADER ── */
+  header {
+    text-align: center;
+    margin-bottom: 70px;
+    position: relative;
+  }
+
+  .header-badge {
+    display: inline-block;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.25em;
+    color: var(--neon-cyan);
+    border: 1px solid var(--neon-cyan);
+    padding: 4px 18px;
+    margin-bottom: 24px;
+    box-shadow: 0 0 12px var(--neon-cyan), inset 0 0 12px rgba(0,245,255,0.05);
+    animation: pulse-border 2.4s ease-in-out infinite;
+  }
+
+  @keyframes pulse-border {
+    0%, 100% { box-shadow: 0 0 8px var(--neon-cyan), inset 0 0 8px rgba(0,245,255,0.05); }
+    50%       { box-shadow: 0 0 22px var(--neon-cyan), 0 0 45px rgba(0,245,255,0.2), inset 0 0 18px rgba(0,245,255,0.1); }
+  }
+
+  h1 {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(1.8rem, 5vw, 3rem);
+    font-weight: 900;
+    line-height: 1.15;
+    letter-spacing: 0.04em;
+    color: #fff;
+    text-shadow:
+      0 0 10px var(--neon-cyan),
+      0 0 30px var(--neon-cyan),
+      0 0 60px rgba(0,245,255,0.4);
+    margin-bottom: 8px;
+    animation: flicker 6s linear infinite;
+  }
+
+  @keyframes flicker {
+    0%, 97%, 100% { opacity: 1; }
+    98%            { opacity: 0.85; }
+    99%            { opacity: 1; }
+    99.5%          { opacity: 0.7; }
+  }
+
+  .subtitle {
+    font-family: 'Orbitron', monospace;
+    font-size: 1rem;
+    color: var(--neon-pink);
+    text-shadow: 0 0 10px var(--neon-pink), 0 0 25px rgba(255,0,229,0.4);
+    letter-spacing: 0.12em;
+    margin-bottom: 4px;
+  }
+
+  .author-date {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-top: 14px;
+    letter-spacing: 0.08em;
+  }
+
+  .author-date span {
+    color: var(--neon-yellow);
+    text-shadow: 0 0 8px var(--neon-yellow);
+  }
+
+  /* ── DIVIDER ── */
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 48px 0 36px;
+  }
+  .divider-line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--neon-cyan), transparent);
+    box-shadow: 0 0 6px var(--neon-cyan);
+  }
+  .divider-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--neon-cyan);
+    box-shadow: 0 0 12px var(--neon-cyan), 0 0 24px var(--neon-cyan);
+  }
+
+  /* ── SECTION TITLES ── */
+  .section-num {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--neon-pink);
+    letter-spacing: 0.2em;
+    display: block;
+    margin-bottom: 4px;
+    text-shadow: 0 0 8px var(--neon-pink);
+  }
+
+  h2 {
+    font-family: 'Orbitron', monospace;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--neon-cyan);
+    text-shadow: 0 0 12px var(--neon-cyan), 0 0 28px rgba(0,245,255,0.3);
+    margin-bottom: 20px;
+    letter-spacing: 0.06em;
+  }
+
+  h3 {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--neon-green);
+    text-shadow: 0 0 10px var(--neon-green);
+    margin: 28px 0 10px;
+    letter-spacing: 0.08em;
+  }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--card);
+    border: 1px solid rgba(0,245,255,0.15);
+    border-left: 3px solid var(--neon-cyan);
+    padding: 28px 32px;
+    margin-bottom: 28px;
+    position: relative;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(0,245,255,0.03) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .card:hover {
+    border-color: rgba(0,245,255,0.4);
+    box-shadow: 0 0 30px rgba(0,245,255,0.08), inset 0 0 30px rgba(0,245,255,0.03);
+  }
+
+  .card-pink  { border-left-color: var(--neon-pink); }
+  .card-pink::before { background: linear-gradient(135deg, rgba(255,0,229,0.03) 0%, transparent 60%); }
+  .card-pink:hover { border-color: rgba(255,0,229,0.4); box-shadow: 0 0 30px rgba(255,0,229,0.08), inset 0 0 30px rgba(255,0,229,0.03); }
+
+  .card-green { border-left-color: var(--neon-green); }
+  .card-green::before { background: linear-gradient(135deg, rgba(57,255,20,0.03) 0%, transparent 60%); }
+  .card-green:hover { border-color: rgba(57,255,20,0.4); box-shadow: 0 0 30px rgba(57,255,20,0.08), inset 0 0 30px rgba(57,255,20,0.03); }
+
+  .card-purple { border-left-color: var(--neon-purple); }
+  .card-purple::before { background: linear-gradient(135deg, rgba(191,0,255,0.03) 0%, transparent 60%); }
+  .card-purple:hover { border-color: rgba(191,0,255,0.4); box-shadow: 0 0 30px rgba(191,0,255,0.08); }
+
+  .card-orange { border-left-color: var(--neon-orange); }
+
+  /* ── HIGHLIGHT BOX ── */
+  .highlight-box {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    background: rgba(0,245,255,0.04);
+    border: 1px solid rgba(0,245,255,0.25);
+    padding: 22px 28px;
+    margin: 20px 0;
+    box-shadow: 0 0 20px rgba(0,245,255,0.06);
+  }
+
+  .math-block {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.3rem;
+    color: var(--neon-yellow);
+    text-shadow: 0 0 14px var(--neon-yellow), 0 0 28px rgba(255,230,0,0.3);
+    white-space: nowrap;
+  }
+
+  /* ── DIRECTION GRID ── */
+  .direction-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    margin: 16px 0;
+  }
+
+  .direction-item {
+    padding: 20px 22px;
+    border: 1px solid;
+    position: relative;
+  }
+  .direction-item.easy {
+    border-color: rgba(57,255,20,0.3);
+    background: rgba(57,255,20,0.04);
+  }
+  .direction-item.hard {
+    border-color: rgba(255,0,229,0.3);
+    background: rgba(255,0,229,0.04);
+  }
+
+  .dir-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    margin-bottom: 10px;
+    display: block;
+  }
+  .dir-label.easy { color: var(--neon-green); text-shadow: 0 0 8px var(--neon-green); }
+  .dir-label.hard { color: var(--neon-pink); text-shadow: 0 0 8px var(--neon-pink); }
+
+  .dir-example {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.05rem;
+    color: #fff;
+    margin: 8px 0;
+  }
+
+  /* ── CODE BLOCK ── */
+  .code-container {
+    margin: 24px 0;
+    position: relative;
+  }
+  .code-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(0,245,255,0.08);
+    border: 1px solid rgba(0,245,255,0.2);
+    border-bottom: none;
+    padding: 10px 20px;
+  }
+  .code-lang {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--neon-cyan);
+    letter-spacing: 0.15em;
+    text-shadow: 0 0 8px var(--neon-cyan);
+  }
+  .code-dots { display: flex; gap: 7px; }
+  .code-dots span {
+    width: 10px; height: 10px; border-radius: 50%;
+  }
+  .code-dots span:nth-child(1) { background: #ff5f57; box-shadow: 0 0 6px #ff5f57; }
+  .code-dots span:nth-child(2) { background: var(--neon-yellow); box-shadow: 0 0 6px var(--neon-yellow); }
+  .code-dots span:nth-child(3) { background: var(--neon-green); box-shadow: 0 0 6px var(--neon-green); }
+
+  pre {
+    background: #030310;
+    border: 1px solid rgba(0,245,255,0.2);
+    padding: 24px 28px;
+    overflow-x: auto;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.82rem;
+    line-height: 1.9;
+    color: #a0c0e0;
+    counter-reset: line;
+  }
+
+  pre .line { display: block; }
+  pre .line::before {
+    counter-increment: line;
+    content: counter(line);
+    display: inline-block;
+    width: 28px;
+    margin-right: 20px;
+    color: var(--text-dim);
+    text-align: right;
+    user-select: none;
+    font-size: 0.72rem;
+  }
+
+  .kw  { color: var(--neon-pink); text-shadow: 0 0 6px rgba(255,0,229,0.5); }
+  .fn  { color: var(--neon-cyan); }
+  .str { color: var(--neon-green); }
+  .cmt { color: #485a78; font-style: italic; }
+  .num { color: var(--neon-yellow); }
+  .op  { color: var(--neon-orange); }
+
+  /* ── RSA KEY CARDS ── */
+  .key-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin: 20px 0;
+  }
+
+  .key-card {
+    padding: 22px 18px;
+    border: 1px solid;
+    text-align: center;
+  }
+  .key-card.public  { border-color: rgba(0,245,255,0.4); background: rgba(0,245,255,0.04); }
+  .key-card.private { border-color: rgba(255,0,229,0.4); background: rgba(255,0,229,0.04); }
+  .key-card.secret  { border-color: rgba(57,255,20,0.4); background: rgba(57,255,20,0.04); }
+
+  .key-icon {
+    font-size: 2rem;
+    display: block;
+    margin-bottom: 10px;
+  }
+  .key-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    margin-bottom: 10px;
+  }
+  .public .key-title  { color: var(--neon-cyan); text-shadow: 0 0 8px var(--neon-cyan); }
+  .private .key-title { color: var(--neon-pink); text-shadow: 0 0 8px var(--neon-pink); }
+  .secret .key-title  { color: var(--neon-green); text-shadow: 0 0 8px var(--neon-green); }
+  .key-body { font-size: 0.9rem; color: var(--text); }
+
+  /* ── OPEN PROBLEM ITEMS ── */
+  .problem-item {
+    display: flex;
+    gap: 18px;
+    padding: 18px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .problem-item:last-child { border-bottom: none; }
+  .problem-bullet {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.5rem;
+    color: var(--neon-purple);
+    text-shadow: 0 0 14px var(--neon-purple);
+    flex-shrink: 0;
+    line-height: 1;
+    margin-top: 3px;
+  }
+  .problem-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.82rem;
+    color: var(--neon-purple);
+    text-shadow: 0 0 8px var(--neon-purple);
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+  }
+
+  /* ── QUANTUM WARNING ── */
+  .quantum-alert {
+    border: 2px solid var(--neon-orange);
+    background: rgba(255,102,0,0.05);
+    padding: 28px 32px;
+    margin: 24px 0;
+    position: relative;
+    box-shadow: 0 0 30px rgba(255,102,0,0.1), inset 0 0 30px rgba(255,102,0,0.04);
+    animation: warning-pulse 3s ease-in-out infinite;
+  }
+  @keyframes warning-pulse {
+    0%, 100% { box-shadow: 0 0 20px rgba(255,102,0,0.1), inset 0 0 20px rgba(255,102,0,0.04); }
+    50%       { box-shadow: 0 0 50px rgba(255,102,0,0.2), inset 0 0 40px rgba(255,102,0,0.08); }
+  }
+  .warning-tag {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.25em;
+    color: var(--neon-orange);
+    text-shadow: 0 0 10px var(--neon-orange);
+    display: block;
+    margin-bottom: 12px;
+  }
+
+  /* ── REFERENCES ── */
+  .ref-item {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    display: flex;
+    gap: 18px;
+  }
+  .ref-tag {
+    color: var(--neon-yellow);
+    text-shadow: 0 0 6px var(--neon-yellow);
+    flex-shrink: 0;
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    text-align: center;
+    margin-top: 80px;
+    padding-top: 32px;
+    border-top: 1px solid rgba(0,245,255,0.1);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+  }
+  footer span { color: var(--neon-cyan); text-shadow: 0 0 6px var(--neon-cyan); }
+
+  p { margin-bottom: 14px; }
+
+  @media (max-width: 600px) {
+    .direction-grid { grid-template-columns: 1fr; }
+    .key-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ── SIMULATOR ── */
+  .simulator-wrap {
+    border: 1px solid rgba(57,255,20,0.35);
+    background: #030f03;
+    margin-bottom: 28px;
+    box-shadow: 0 0 40px rgba(57,255,20,0.08), inset 0 0 40px rgba(57,255,20,0.03);
+    position: relative;
+    overflow: hidden;
+  }
+  .simulator-wrap::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(57,255,20,0.012) 3px, rgba(57,255,20,0.012) 4px);
+    pointer-events: none;
+  }
+
+  .sim-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 22px;
+    background: rgba(57,255,20,0.07);
+    border-bottom: 1px solid rgba(57,255,20,0.25);
+  }
+  .sim-title {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--neon-green);
+    text-shadow: 0 0 10px var(--neon-green);
+    letter-spacing: 0.12em;
+  }
+  .sim-status {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--neon-green);
+    text-shadow: 0 0 8px var(--neon-green);
+    letter-spacing: 0.15em;
+    animation: pulse-border 2s infinite;
+  }
+  .sim-status.running { color: var(--neon-yellow); text-shadow: 0 0 8px var(--neon-yellow); animation: none; }
+  .sim-status.error   { color: var(--neon-pink);   text-shadow: 0 0 8px var(--neon-pink);   animation: none; }
+  .sim-status.success { color: var(--neon-cyan);   text-shadow: 0 0 8px var(--neon-cyan);   animation: none; }
+
+  .sim-body {
+    padding: 24px 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .sim-input-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .sim-prompt-line {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .sim-prompt-text {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.8rem;
+    color: #6a8a6a;
+    letter-spacing: 0.05em;
+  }
+  .sim-var { color: var(--neon-cyan); text-shadow: 0 0 6px var(--neon-cyan); }
+
+  .sim-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid rgba(57,255,20,0.3);
+    background: rgba(0,0,0,0.5);
+    padding: 10px 16px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .sim-input-wrap:focus-within {
+    border-color: var(--neon-green);
+    box-shadow: 0 0 18px rgba(57,255,20,0.15);
+  }
+  .sim-cursor-prefix {
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--neon-green);
+    text-shadow: 0 0 8px var(--neon-green);
+    font-size: 1.1rem;
+    flex-shrink: 0;
+  }
+  .sim-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.1rem;
+    color: #fff;
+    flex: 1;
+    caret-color: var(--neon-green);
+    letter-spacing: 0.08em;
+  }
+  .sim-input::placeholder { color: #2a3a2a; }
+  .sim-input::-webkit-inner-spin-button,
+  .sim-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+  .sim-tag {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    padding: 2px 8px;
+    border-radius: 2px;
+    transition: all 0.3s;
+    flex-shrink: 0;
+    min-width: 70px;
+    text-align: center;
+  }
+  .sim-tag.valid   { background: rgba(57,255,20,0.15);  color: var(--neon-green); border: 1px solid rgba(57,255,20,0.4);  text-shadow: 0 0 6px var(--neon-green); }
+  .sim-tag.invalid { background: rgba(255,0,229,0.1);   color: var(--neon-pink);  border: 1px solid rgba(255,0,229,0.4);  text-shadow: 0 0 6px var(--neon-pink); }
+
+  .sim-run-btn {
+    align-self: flex-start;
+    background: transparent;
+    border: 2px solid var(--neon-green);
+    color: var(--neon-green);
+    font-family: 'Orbitron', monospace;
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    padding: 12px 30px;
+    cursor: pointer;
+    text-shadow: 0 0 10px var(--neon-green);
+    box-shadow: 0 0 16px rgba(57,255,20,0.15), inset 0 0 16px rgba(57,255,20,0.05);
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+  .sim-run-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--neon-green);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .sim-run-btn:hover {
+    color: #000;
+    text-shadow: none;
+    box-shadow: 0 0 30px rgba(57,255,20,0.5);
+  }
+  .sim-run-btn:hover::before { opacity: 1; }
+  .sim-run-btn span, .sim-run-btn { position: relative; z-index: 1; }
+  .sim-run-btn:active { transform: scale(0.97); }
+  .btn-icon { margin-right: 8px; position: relative; z-index: 1; }
+
+  /* Terminal output */
+  .sim-terminal {
+    background: #000;
+    border: 1px solid rgba(57,255,20,0.2);
+    padding: 18px 20px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.82rem;
+    line-height: 2;
+    min-height: 140px;
+    max-height: 340px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--neon-green) #000;
+  }
+  .sim-terminal::-webkit-scrollbar { width: 4px; }
+  .sim-terminal::-webkit-scrollbar-track { background: #000; }
+  .sim-terminal::-webkit-scrollbar-thumb { background: var(--neon-green); }
+
+  .term-line { display: block; color: #5aff5a; }
+  .term-line.dim     { color: #2a4a2a; }
+  .term-line.header  { color: var(--neon-cyan); text-shadow: 0 0 8px var(--neon-cyan); }
+  .term-line.success { color: var(--neon-green); text-shadow: 0 0 8px var(--neon-green); }
+  .term-line.error   { color: var(--neon-pink); text-shadow: 0 0 8px var(--neon-pink); }
+  .term-line.info    { color: var(--neon-yellow); }
+  .term-line.process { color: #aaffaa; }
+  .term-line.result  { color: var(--neon-cyan); font-size: 0.9rem; text-shadow: 0 0 6px var(--neon-cyan); }
+
+  .term-blink {
+    display: inline-block;
+    color: var(--neon-green);
+    text-shadow: 0 0 8px var(--neon-green);
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+  @media (max-width: 600px) {
+    .sim-run-btn { width: 100%; text-align: center; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <header>
+    <div class="header-badge">CRIPTOGRAFÍA // TEORÍA DE NÚMEROS</div>
+    <h1>El Problema de la Factorización</h1>
+    <div class="subtitle">Base de RSA</div>
+    <div class="author-date">
+      Por <span>Pepe Grillo</span> &nbsp;·&nbsp; <span>25 de abril de 2026</span>
+    </div>
+  </header>
+
+  <!-- SECCIÓN 1: INTRODUCCIÓN -->
+  <div class="divider"><div class="divider-line"></div><div class="divider-dot"></div><div class="divider-line"></div></div>
+  <span class="section-num">// 01</span>
+  <h2>Introducción</h2>
+  <div class="card">
+    <p>El <strong>Problema de la Factorización de Enteros</strong> es el pilar sobre el cual se construye gran parte de la seguridad en internet. Su importancia radica en una asimetría fundamental: es una operación que es fácil de hacer, pero increíblemente difícil de deshacer.</p>
+    <p>A continuación se presenta una introducción estructurada para entender por qué este problema matemático mantiene a salvo tus datos.</p>
+  </div>
+
+  <!-- SECCIÓN 2: FUNCIÓN TRAMPA -->
+  <div class="divider"><div class="divider-line"></div><div class="divider-dot"></div><div class="divider-line"></div></div>
+  <span class="section-num">// 02</span>
+  <h2>La Intuición: La Función Trampa</h2>
+  <div class="card card-pink">
+    <p>En matemáticas, una <strong>función de trampa</strong> (o <em>one-way function</em>) es aquella que es sencilla de calcular en una dirección, pero casi imposible de invertir a menos que tengas una información especial — la <em>"llave"</em>.</p>
+  </div>
+
+  <!-- Dirección fácil / difícil -->
+  <div class="direction-grid">
+    <div class="direction-item easy">
+      <span class="dir-label easy">→ DIRECCIÓN FÁCIL // MULTIPLICACIÓN</span>
+      <p style="font-size:0.95rem;">Si te pido multiplicar dos números primos grandes, cualquier computadora lo hace en microsegundos.</p>
+      <div class="dir-example">61 × 53 = <span style="color:var(--neon-green);text-shadow:0 0 10px var(--neon-green)">3,233</span></div>
+    </div>
+    <div class="direction-item hard">
+      <span class="dir-label hard">← DIRECCIÓN DIFÍCIL // FACTORIZACIÓN</span>
+      <p style="font-size:0.95rem;">Si solo te doy el número 3,233 y te pido encontrar qué dos primos lo originaron, tendrías que probar divisiones una por una. Con 600 dígitos, las computadoras más potentes tardarían <strong>siglos</strong>.</p>
+    </div>
+  </div>
+
+  <!-- SECCIÓN 2.3: CÓDIGO OCTAVE -->
+  <h3>// 2.3 &nbsp;Código en Octave</h3>
+  <div class="code-container">
+    <div class="code-header">
+      <div class="code-dots"><span></span><span></span><span></span></div>
+      <span class="code-lang">OCTAVE // Primos.m</span>
+    </div>
+    <pre><span class="line"><span class="cmt">% Script interactivo de Factorización RSA en Octave</span></span>
+<span class="line"><span class="kw">pkg</span> <span class="fn">load</span> communications; <span class="cmt">% Asegura el acceso a funciones matemáticas</span></span>
+<span class="line"></span>
+<span class="line"><span class="fn">printf</span>(<span class="str">"--- GENERADOR DE CLAVE RSA (SIMULADO) ---\n"</span>);</span>
+<span class="line"></span>
+<span class="line"><span class="cmt">% 1. Entrada de datos por el usuario</span></span>
+<span class="line">p <span class="op">=</span> <span class="fn">input</span>(<span class="str">"Introduce el primer número primo (p): "</span>);</span>
+<span class="line">q <span class="op">=</span> <span class="fn">input</span>(<span class="str">"Introduce el segundo número primo (q): "</span>);</span>
+<span class="line"></span>
+<span class="line"><span class="cmt">% 2. Validación: ¿Son ambos números primos?</span></span>
+<span class="line"><span class="kw">if</span> <span class="fn">isprime</span>(p) <span class="op">&&</span> <span class="fn">isprime</span>(q)</span>
+<span class="line"></span>
+<span class="line">  <span class="cmt">% Operación de cifrado (Fácil)</span></span>
+<span class="line">  N <span class="op">=</span> p <span class="op">*</span> q;</span>
+<span class="line">  <span class="fn">printf</span>(<span class="str">"\n[PROCESO]: Ambos son primos. Generando clave pública...\n"</span>);</span>
+<span class="line">  <span class="fn">printf</span>(<span class="str">"Producto N (Clave Pública): %d\n"</span>, N);</span>
+<span class="line"></span>
+<span class="line">  <span class="cmt">% 3. Intento de Factorización (Difícil)</span></span>
+<span class="line">  <span class="fn">printf</span>(<span class="str">"\n--- INICIANDO ATAQUE DE FUERZA BRUTA ---\n"</span>);</span>
+<span class="line">  <span class="fn">printf</span>(<span class="str">"Buscando los factores de %d sin conocer p ni q...\n"</span>, N);</span>
+<span class="line"></span>
+<span class="line">  tic; <span class="cmt">% Iniciar cronómetro</span></span>
+<span class="line">  factor_encontrado <span class="op">=</span> [];</span>
+<span class="line"></span>
+<span class="line">  <span class="cmt">% Algoritmo de división por tentativa hasta la raíz cuadrada de N</span></span>
+<span class="line">  limite <span class="op">=</span> <span class="fn">floor</span>(<span class="fn">sqrt</span>(N));</span>
+<span class="line">  <span class="kw">for</span> i <span class="op">=</span> <span class="num">2</span>:limite</span>
+<span class="line">    <span class="kw">if</span> <span class="fn">rem</span>(N, i) <span class="op">==</span> <span class="num">0</span></span>
+<span class="line">      factor_encontrado <span class="op">=</span> [i, N/i];</span>
+<span class="line">      <span class="kw">break</span>;</span>
+<span class="line">    <span class="kw">end</span></span>
+<span class="line">  <span class="kw">end</span></span>
+<span class="line">  tiempo <span class="op">=</span> toc;</span>
+<span class="line"></span>
+<span class="line">  <span class="cmt">% 4. Resultados</span></span>
+<span class="line">  <span class="kw">if</span> ~<span class="fn">isempty</span>(factor_encontrado)</span>
+<span class="line">    <span class="fn">printf</span>(<span class="str">"\n¡ÉXITO! Se ha roto el cifrado.\n"</span>);</span>
+<span class="line">    <span class="fn">printf</span>(<span class="str">"Factores descubiertos: %d y %d\n"</span>, factor_encontrado(<span class="num">1</span>), factor_encontrado(<span class="num">2</span>));</span>
+<span class="line">    <span class="fn">printf</span>(<span class="str">"Tiempo total de cómputo: %.6f segundos\n"</span>, tiempo);</span>
+<span class="line">  <span class="kw">else</span></span>
+<span class="line">    <span class="fn">printf</span>(<span class="str">"\nERROR: No se pudieron encontrar los factores.\n"</span>);</span>
+<span class="line">  <span class="kw">end</span></span>
+<span class="line"></span>
+<span class="line"><span class="kw">else</span></span>
+<span class="line">  <span class="cmt">% Respuesta si el usuario no ingresó primos</span></span>
+<span class="line">  <span class="fn">printf</span>(<span class="str">"\n[ERROR]: Uno o ambos números no son primos.\n"</span>);</span>
+<span class="line">  <span class="kw">if</span> ~<span class="fn">isprime</span>(p); <span class="fn">printf</span>(<span class="str">"- %d no es un número primo.\n"</span>, p); <span class="kw">end</span></span>
+<span class="line">  <span class="kw">if</span> ~<span class="fn">isprime</span>(q); <span class="fn">printf</span>(<span class="str">"- %d no es un número primo.\n"</span>, q); <span class="kw">end</span></span>
+<span class="line">  <span class="fn">printf</span>(<span class="str">"Por favor, intenta de nuevo con números primos.\n"</span>);</span>
+<span class="line"><span class="kw">end</span></span></pre>
+  </div>
+
+  <!-- SIMULADOR INTERACTIVO -->
+  <div class="divider"><div class="divider-line"></div><div class="divider-dot"></div><div class="divider-line"></div></div>
+  <span class="section-num">// 2.4 — SIMULADOR INTERACTIVO</span>
+  <h2>Ejecuta el Código</h2>
+
+  <div class="simulator-wrap">
+    <div class="sim-header">
+      <span class="sim-title">▶ PRIMOS.M — TERMINAL INTERACTIVA</span>
+      <span class="sim-status" id="simStatus">● LISTO</span>
+    </div>
+
+    <div class="sim-body">
+      <!-- INPUT PANEL -->
+      <div class="sim-input-panel">
+        <div class="sim-prompt-line">
+          <span class="sim-prompt-text">Introduce el primer número primo <span class="sim-var">(p)</span>:</span>
+          <div class="sim-input-wrap">
+            <span class="sim-cursor-prefix">›</span>
+            <input type="number" id="inputP" class="sim-input" placeholder="ej: 61" min="2" autocomplete="off" />
+            <span class="sim-tag" id="tagP"></span>
+          </div>
+        </div>
+        <div class="sim-prompt-line">
+          <span class="sim-prompt-text">Introduce el segundo número primo <span class="sim-var">(q)</span>:</span>
+          <div class="sim-input-wrap">
+            <span class="sim-cursor-prefix">›</span>
+            <input type="number" id="inputQ" class="sim-input" placeholder="ej: 53" min="2" autocomplete="off" />
+            <span class="sim-tag" id="tagQ"></span>
+          </div>
+        </div>
+
+        <button class="sim-run-btn" id="runBtn" onclick="runSimulation()">
+          <span class="btn-icon">⚡</span> EJECUTAR SCRIPT
+        </button>
+      </div>
+
+      <!-- OUTPUT TERMINAL -->
+      <div class="sim-terminal" id="terminal">
+        <div class="term-line dim">% Esperando entrada de datos...</div>
+        <div class="term-line dim">% Ingresa p y q arriba y presiona EJECUTAR</div>
+        <div class="term-blink" id="termBlink">█</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECCIÓN 2.5: RSA -->
+  <div class="divider"><div class="divider-line"></div><div class="divider-dot"></div><div class="divider-line"></div></div>
+  <span class="section-num">// 2.5</span>
+  <h2>¿Cómo lo usa el algoritmo RSA?</h2>
+  <div class="card card-green">
+    <p>El sistema <strong>RSA</strong> (llamado así por sus inventores <em>Rivest, Shamir y Adleman</em>) utiliza esta dificultad para crear un sistema de llave pública y llave privada.</p>
+  </div>
+
+  <div class="key-grid">
+    <div class="key-card public">
+      <span class="key-icon">🔓</span>
+      <div class="key-title">LLAVE PÚBLICA</div>
+      <div class="key-body">Es el resultado de <strong>p × q = N</strong>. Este número se entrega a todo el mundo. Cualquiera puede usarlo para cifrar un mensaje.</div>
+    </div>
+    <div class="key-card private">
+      <span class="key-icon">🔐</span>
+      <div class="key-title">LLAVE PRIVADA</div>
+      <div class="key-body">Son los números originales <strong>p</strong> y <strong>q</strong>. Solo tú los conoces. Necesarios para descifrar.</div>
+    </div>
+    <div class="key-card secret">
+      <span class="key-icon">⚙️</span>
+      <div class="key-title">EL SECRETO</div>
+      <div class="key-body">Para descifrar se necesita la función de Euler, calculable solo con p y q separados.</div>
+    </div>
+  </div>
+
+  <div class="highlight-box">
+    <div class="math-block">φ(N) = (p − 1)(q − 1)</div>
+    <div style="font-size:0.95rem;">Solo calculable eficientemente cuando se conocen <strong>p</strong> y <strong>q</strong> por separado. Sin ellos, el descifrado es imposible.</div>
+  </div>
+
+  <!-- SECCIÓN 2.6: PROBLEMA ABIERTO -->
+  <div class="divider"><div class="divider-line"></div><div class="divider-dot"></div><div class="divider-line"></div></div>
+  <span class="section-num">// 2.6</span>
+  <h2>¿Por qué es un Problema Abierto?</h2>
+  <div class="card card-purple">
+    <div class="problem-item">
+      <div class="problem-bullet">◈</div>
+      <div>
+        <div class="problem-title">SIN PRUEBA DE IMPOSIBILIDAD</div>
+        <p>Nadie ha demostrado que <em>no exista</em> un algoritmo rápido para factorizar en computadoras clásicas. Simplemente, después de décadas de investigación, nadie lo ha encontrado.</p>
+      </div>
+    </div>
+    <div class="problem-item">
+      <div class="problem-bullet">◈</div>
+      <div>
+        <div class="problem-title">COMPLEJIDAD COMPUTACIONAL</div>
+        <p>En la teoría de la complejidad, la factorización no se ha clasificado definitivamente. Se sabe que no es "tan fácil" (clase <strong>P</strong>), pero tampoco se ha demostrado que sea de los más difíciles (clase <strong>NP-completo</strong>).</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECCIÓN 2.7: AMENAZA CUÁNTICA -->
+  <div class="divider"><div class="divider-line"></div><div class="divider-dot"></div><div class="divider-line"></div></div>
+  <span class="section-num">// 2.7</span>
+  <h2>La Amenaza en el Horizonte: El Factor Cuántico</h2>
+
+  <div class="quantum-alert">
+    <span class="warning-tag">⚠ ALERTA CUÁNTICA // AMENAZA CRÍTICA</span>
+    <p>El mayor desafío para este problema es el <strong>Algoritmo de Shor</strong>. Este algoritmo matemático demuestra que una computadora cuántica lo suficientemente grande podría factorizar números gigantes en <strong>minutos</strong>.</p>
+    <p style="margin-top:12px; margin-bottom:0;">Si se construye una computadora cuántica capaz de manejar miles de <em>qubits</em> estables, el "Problema de la Factorización" dejaría de ser un problema, y el sistema RSA quedaría <strong>obsoleto instantáneamente</strong>. Por eso, hoy se trabaja en la <strong>Criptografía Post-Cuántica</strong>, que busca problemas matemáticos aún más difíciles que la factorización.</p>
+  </div>
+
+  <!-- REFERENCIAS -->
+  <div class="divider"><div class="divider-line"></div><div class="divider-dot"></div><div class="divider-line"></div></div>
+  <span class="section-num">// REFERENCIAS</span>
+  <h2>Referencias</h2>
+  <div class="card card-orange">
+    <div class="ref-item">
+      <span class="ref-tag">[Gre93]</span>
+      <span>George D. Greenwade. <em>The Comprehensive Tex Archive Network (CTAN)</em>. TUGBoat, 14(3):342–351, 1993.</span>
+    </div>
+  </div>
+
+  <footer>
+    <span>// RSA — FACTORIZACIÓN DE ENTEROS //</span><br>
+    Pepe Grillo · 2026 · Convertido a HTML con estética neón
+  </footer>
+
+</div>
+<script>
+  // ── Primality check (Miller-Rabin deterministic for small numbers) ──
+  function isPrime(n) {
+    if (n < 2) return false;
+    if (n === 2 || n === 3) return true;
+    if (n % 2 === 0) return false;
+    for (let i = 3; i <= Math.sqrt(n); i += 2) {
+      if (n % i === 0) return false;
+    }
+    return true;
+  }
+
+  // Live validation tags
+  ['P','Q'].forEach(letter => {
+    document.getElementById('input'+letter).addEventListener('input', function() {
+      const tag = document.getElementById('tag'+letter);
+      const val = parseInt(this.value);
+      if (!this.value) { tag.textContent = ''; tag.className = 'sim-tag'; return; }
+      if (isPrime(val)) {
+        tag.textContent = '✓ PRIMO'; tag.className = 'sim-tag valid';
+      } else {
+        tag.textContent = '✗ NO PRIMO'; tag.className = 'sim-tag invalid';
+      }
+    });
+  });
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  async function typeLines(lines, terminal) {
+    for (const [cls, text] of lines) {
+      await sleep(120 + Math.random() * 80);
+      const span = document.createElement('span');
+      span.className = 'term-line ' + cls;
+      span.textContent = text;
+      // Insert before blink cursor
+      const blink = document.getElementById('termBlink');
+      terminal.insertBefore(span, blink);
+      terminal.scrollTop = terminal.scrollHeight;
+    }
+  }
+
+  async function runSimulation() {
+    const pVal = parseInt(document.getElementById('inputP').value);
+    const qVal = parseInt(document.getElementById('inputQ').value);
+    const terminal = document.getElementById('terminal');
+    const status  = document.getElementById('simStatus');
+    const btn     = document.getElementById('runBtn');
+
+    // Clear terminal
+    const blink = document.getElementById('termBlink');
+    while (terminal.firstChild && terminal.firstChild !== blink) {
+      terminal.removeChild(terminal.firstChild);
+    }
+
+    btn.disabled = true;
+    status.textContent = '● EJECUTANDO';
+    status.className = 'sim-status running';
+
+    await typeLines([['header', '--- GENERADOR DE CLAVE RSA (SIMULADO) ---']], terminal);
+    await sleep(200);
+    await typeLines([
+      ['process', `[INPUT] p = ${isNaN(pVal) ? '(vacío)' : pVal}`],
+      ['process', `[INPUT] q = ${isNaN(qVal) ? '(vacío)' : qVal}`],
+    ], terminal);
+    await sleep(300);
+
+    // Validate inputs exist
+    if (isNaN(pVal) || isNaN(qVal)) {
+      await typeLines([['error', '[ERROR]: Debes ingresar ambos valores.']], terminal);
+      status.textContent = '● ERROR'; status.className = 'sim-status error';
+      btn.disabled = false; return;
+    }
+
+    // Validate primes
+    const pPrime = isPrime(pVal);
+    const qPrime = isPrime(qVal);
+
+    await typeLines([['dim', '% Validando: ¿Son ambos números primos?']], terminal);
+    await sleep(350);
+
+    if (!pPrime || !qPrime) {
+      await typeLines([['error', '']], terminal);
+      await typeLines([['error', '[ERROR]: Uno o ambos números no son primos.']], terminal);
+      if (!pPrime) await typeLines([['error', `  - ${pVal} no es un número primo.`]], terminal);
+      if (!qPrime) await typeLines([['error', `  - ${qVal} no es un número primo.`]], terminal);
+      await typeLines([['info', 'Por favor, intenta de nuevo con números primos.']], terminal);
+      status.textContent = '● ERROR'; status.className = 'sim-status error';
+      btn.disabled = false; return;
+    }
+
+    // Both prime — generate key
+    const N = pVal * qVal;
+    await typeLines([
+      ['success', '[PROCESO]: Ambos son primos. Generando clave pública...'],
+      ['result',  `  Producto N (Clave Pública): ${N}`],
+    ], terminal);
+    await sleep(400);
+
+    // Brute-force attack simulation
+    await typeLines([
+      ['header', ''],
+      ['header', '--- INICIANDO ATAQUE DE FUERZA BRUTA ---'],
+      ['info',   `Buscando los factores de ${N} sin conocer p ni q...`],
+    ], terminal);
+    await sleep(500);
+
+    // Simulate timing
+    const tStart = performance.now();
+    const limite = Math.floor(Math.sqrt(N));
+    let factorA = null, factorB = null;
+    for (let i = 2; i <= limite; i++) {
+      if (N % i === 0) { factorA = i; factorB = N / i; break; }
+    }
+    const tiempo = ((performance.now() - tStart) / 1000).toFixed(6);
+
+    await typeLines([['dim', `% Divisiones probadas hasta √${N} ≈ ${limite}`]], terminal);
+    await sleep(300);
+
+    if (factorA !== null) {
+      await typeLines([
+        ['success', ''],
+        ['success', '¡ÉXITO! Se ha roto el cifrado.'],
+        ['result',  `  Factores descubiertos: ${factorA} y ${factorB}`],
+        ['result',  `  Tiempo total de cómputo: ${tiempo} segundos`],
+        ['dim',     ''],
+        ['info',    `  Verificación: ${factorA} × ${factorB} = ${factorA * factorB} ✓`],
+        ['info',    `  φ(N) = (${factorA}-1)(${factorB}-1) = ${(factorA-1)*(factorB-1)}`],
+      ], terminal);
+      status.textContent = '● ÉXITO'; status.className = 'sim-status success';
+    } else {
+      await typeLines([['error', '\nERROR: No se pudieron encontrar los factores (esto no debería pasar si N = p*q).']], terminal);
+      status.textContent = '● ERROR'; status.className = 'sim-status error';
+    }
+
+    btn.disabled = false;
+  }
+</script>
+</body>
+</html>
